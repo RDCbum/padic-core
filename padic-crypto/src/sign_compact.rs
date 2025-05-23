@@ -1,4 +1,4 @@
-use crate::kem_compact::{PublicKey, SecretKey, keygen as kem_keygen};
+use crate::kem_compact::{keygen as kem_keygen, PublicKey, SecretKey};
 use blake3::Hasher;
 use padic_core::mod5::Mod5;
 
