@@ -1,1 +1,2 @@
-vendor/* -text
+vendor/* -text eol=lf
+
