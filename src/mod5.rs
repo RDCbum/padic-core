@@ -16,7 +16,11 @@ impl Mod5 {
         let modulus = 5u128.pow(r);
         // Convertimos a rango positivo antes de reducir.
         let val = ((value % modulus as i128) + modulus as i128) as u128 % modulus;
-        Self { value: val, r, modulus }
+        Self {
+            value: val,
+            r,
+            modulus,
+        }
     }
 
     /// Devuelve el valor reducido (útil para tests o debug).

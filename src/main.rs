@@ -1,5 +1,5 @@
- mod mod5;
+mod mod5;
 
- fn main() {
-     println!("Hello, world!");
- }
+fn main() {
+    println!("Hello, world!");
+}
