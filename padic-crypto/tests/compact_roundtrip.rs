@@ -14,7 +14,7 @@ fn compact_roundtrip_stub() {
     let (ct, ss_enc) = kem_compact::encaps(&pk);
 
     // 3. Desencapsulamos con la clave secreta
-    let ss_dec = kem_compact::decaps(&ct, &sk);
+    let ss_dec = kem_compact::decaps(&ct, &sk, &pk);
 
     // 4. Deben coincidir
     assert_eq!(
