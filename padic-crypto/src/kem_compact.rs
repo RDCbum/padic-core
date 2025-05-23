@@ -1,79 +1,113 @@
-//! KEM Compact – stub de trabajo
+//! KEM Compact – stub de trabajo (v0.3)
 //! ---------------------------------------------------------------
-//!  - Dimensión fija N = 109
-//!  - Módulo 5^R con R = 12
-//!  - keygen(): vectores aleatorios de Mod5 (por ahora pk == sk)
-//!  - encaps()/decaps(): round-trip provisional mediante BLAKE3
+//! • Dimensión fija N = 109
+//! • Módulo Q = 5¹² = 244 140 625
+//! • keygen(): genera matriz A, secreto s y t = A·s (mod Q)
+//! • encaps/decaps(): round-trip provisional mediante BLAKE3
 //!
-//!  ⛔  ESTE CÓDIGO NO ES LA IMPLEMENTACIÓN MSIS FINAL.
-//!      Sirve únicamente para validar la API y los flujos
-//!      mientras desarrollamos el resto del ecosistema.
+//! ⛔  CÓDIGO DE PRUEBA — no es todavía la MSIS final.
 
+#![deny(warnings)]
 #![allow(clippy::redundant_clone)]
 
-use padic_core::mod5::Mod5;
-use rand::random;
 use blake3;
+use padic_core::mod5::Mod5;
+use rand::{Rng, rng};
 
-pub const N: usize = 109;   // dimensión Compact
-pub const R: u32   = 12;    // q = 5^12
+/// Número fijo de filas/columnas
+pub const N: usize = 109;
+/// Potencia del módulo
+const R_PARAM: u32 = 12;
+/// Q = 5^R
+pub const Q: u128 = 5u128.pow(R_PARAM);
 
-/// Clave pública (stub): vector de `Mod5`.
+/// Clave pública Compact : matriz `a` y vector `t = A·s`
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PublicKey(pub Vec<Mod5>);
+pub struct PublicKey {
+    pub a: Vec<Vec<Mod5>>,
+    pub t: Vec<Mod5>,
+}
 
-/// Clave secreta (stub): igual que `PublicKey` de momento.
+/// Clave secreta Compact (vector `s`)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SecretKey(pub Vec<Mod5>);
 
-/// Ciphertext (stub): copia directa del `PublicKey`.
+/// Ciphertext provisional (vector `u`)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Ciphertext(pub Vec<Mod5>);
 
-/// Genera tupla `(pk, sk)` con vectores aleatorios.
-/// Por ahora `pk` y `sk` son idénticos (suficiente para probar flujo).
+/* ------------------------------------------------------------------------ */
+
+/// keygen(): genera (pk, sk) con `t = A·s (mod Q)`
 pub fn keygen() -> (PublicKey, SecretKey) {
-    let mut pk = Vec::with_capacity(N);
-    let mut sk = Vec::with_capacity(N);
+    let mut rng = rng(); // rand 0.9: alias de thread_rng()
 
-    for _ in 0..N {
-        // 64 bits aleatorios → reducción mod 5^R
-        let r = random::<u64>() as i128;
-        let m = Mod5::new(r, R);
-        pk.push(m.clone());
-        sk.push(m);              // stub: pk == sk
-    }
+    /* ---- matriz A ---- */
+    let a: Vec<Vec<Mod5>> = (0..N)
+        .map(|_| {
+            (0..N)
+                .map(|_| {
+                    let r = rng.random::<u128>() % Q; // `gen` → `random`
+                    Mod5::new(r as i128, R_PARAM)
+                })
+                .collect()
+        })
+        .collect();
 
-    (PublicKey(pk), SecretKey(sk))
+    /* ---- vector secreto s ---- */
+    let s: Vec<Mod5> = (0..N)
+        .map(|_| {
+            let r = rng.random::<u128>() % Q;
+            Mod5::new(r as i128, R_PARAM)
+        })
+        .collect();
+
+    /* ---- t = A · s ---- */
+    let t: Vec<Mod5> = a
+        .iter()
+        .map(|row| {
+            row.iter()
+                .zip(&s)
+                .fold(Mod5::new(0, R_PARAM), |acc, (a_ij, s_j)| {
+                    acc + a_ij.clone() * s_j.clone()
+                })
+        })
+        .collect();
+
+    (PublicKey { a, t }, SecretKey(s))
 }
 
-/// `encaps` provisional:
-///   1. Ciphertext = copia de `pk`.
-///   2. shared_secret = BLAKE3(serialización ct).
-pub fn encaps(pk: &PublicKey) -> (Ciphertext, [u8; 32]) {
-    // 1) construir el ciphertext
-    let ct = Ciphertext(pk.0.clone());
+/* ------------------------------------------------------------------------ */
 
-    // 2) serializar cada `Mod5` (u128 little-endian)
-    let mut bytes = Vec::with_capacity(N * 16);
-    for m in &ct.0 {
-        bytes.extend_from_slice(&m.value().to_le_bytes());
-    }
+/// encaps(): genera `u` aleatorio y K = BLAKE3(u)
+pub fn encaps(_pk: &PublicKey) -> (Ciphertext, [u8; 32]) {
+    let mut rng = rng();
 
-    // 3) shared_secret = hash(bytes)
-    let hash = blake3::hash(&bytes);
-    (ct, *hash.as_bytes())
+    let u: Vec<Mod5> = (0..N)
+        .map(|_| {
+            let r = rng.random::<u128>() % Q;
+            Mod5::new(r as i128, R_PARAM)
+        })
+        .collect();
+
+    let ct = Ciphertext(u);
+    let shared = blake3::hash(&serialize_mod5_vec(&ct.0));
+    (ct, *shared.as_bytes())
 }
 
-/// `decaps` provisional:
-///   Repite la misma serialización + hash -> misma clave.
+/// decaps(): K = BLAKE3(u)
 pub fn decaps(ct: &Ciphertext, _sk: &SecretKey) -> [u8; 32] {
-    let mut bytes = Vec::with_capacity(N * 16);
-    for m in &ct.0 {
-        bytes.extend_from_slice(&m.value().to_le_bytes());
-    }
-    let hash = blake3::hash(&bytes);
-    *hash.as_bytes()
+    let shared = blake3::hash(&serialize_mod5_vec(&ct.0));
+    *shared.as_bytes()
 }
 
+/* ---------- helper ---------- */
 
+fn serialize_mod5_vec(v: &[Mod5]) -> Vec<u8> {
+    // Cada value() es u128 → 16 bytes LE
+    let mut out = Vec::with_capacity(v.len() * 16);
+    for m in v {
+        out.extend_from_slice(&m.value().to_le_bytes());
+    }
+    out
+}
