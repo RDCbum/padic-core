@@ -1,26 +1,24 @@
+//! Muestreadores para el KEM Compact
+
 #![deny(warnings)]
 
-use crate::kem_compact::Q;
 use rand_core::{CryptoRng, RngCore};
 
-/// Generate a uniform random `u128` in `[0, Q)` using rejection sampling.
-pub fn uniform_u128<R: RngCore + CryptoRng + ?Sized>(rng: &mut R) -> u128 {
+/// Rechazo uniforme: devuelve `x ∈ [0, q)`
+pub fn uniform_u128<R: RngCore + CryptoRng + ?Sized>(rng: &mut R, q: u128) -> u128 {
+    assert!(q > 0, "q must be > 0");
+    let zone = u128::MAX - (u128::MAX % q); // ← q se usa aquí
     loop {
-        let val = rng.next_u32() as u128;
-        if val < Q {
-            return val;
+        let mut buf = [0u8; 16];
+        rng.fill_bytes(&mut buf);
+        let x = u128::from_le_bytes(buf);
+        if x < zone {
+            return x % q;
         }
     }
 }
 
-/// Sample from the error distribution { -2, -1, 0, 1, 2 } with equal probability.
+/// Error corto uniforme en `{-2,-1,0,1,2}`
 pub fn sample_error<R: RngCore + CryptoRng + ?Sized>(rng: &mut R) -> i8 {
-    const TABLE: [i8; 5] = [-2, -1, 0, 1, 2];
-    loop {
-        let v = rng.next_u32();
-        let range = u32::MAX - (u32::MAX % 5);
-        if v < range {
-            return TABLE[(v % 5) as usize];
-        }
-    }
+    uniform_u128(rng, 5) as i8 - 2
 }
