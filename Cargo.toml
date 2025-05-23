@@ -1,6 +1,22 @@
 [package]
-name = "padic-core"
-version = "0.1.0"
-edition = "2024"
+name        = "padic-core"
+version     = "0.1.0"
+edition     = "2024"
+license     = "MIT"
+description = "p-adic arithmetic core for Padlock+"
 
+# ────────────── WORKSPACE ──────────────
+[workspace]
+members = [
+    ".",            # el propio padic-core  (el punto)
+    "padic-crypto", # el nuevo crate
+]
+
+# ───────── DEPENDENCIAS DEL CRATE ───────
 [dependencies]
+
+
+[dev-dependencies]         # ← sólo para tests y benchmarks de padic-core
+proptest  = "1.4"
+criterion = "0.5"
+rand       = "0.9"

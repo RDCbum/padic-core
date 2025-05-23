@@ -1,0 +1,17 @@
+[package]
+name        = "padic-crypto"
+version     = "0.0.1"
+edition     = "2024"
+license     = "MIT"
+description = "Compact MSIS/LWE KEM & signature built on padic-core"
+
+[dev-dependencies]
+proptest = "1.4"
+
+[dependencies]
+padic-core = { path = ".." }   # ← un solo punto (.. = directorio padre)
+rand = "0.9"
+blake3 = "1.5"
+
+
+

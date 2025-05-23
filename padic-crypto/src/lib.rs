@@ -1,14 +1,7 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+#![deny(warnings)]
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+// Reexportaremos las primitivas aquí más adelante
+pub mod kem_compact;
+pub mod sign_compact;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+// --- ← aquí ya no hay nada más --- //

@@ -22,4 +22,3 @@ fn compact_roundtrip_stub() {
         "El shared secret obtenido en decaps no coincide con el de encaps"
     );
 }
-
