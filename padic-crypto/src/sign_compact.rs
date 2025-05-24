@@ -93,7 +93,7 @@ fn sample_sparse_vec(rng: &mut impl RngCore) -> Vec<Mod5> {
 }
 
 #[inline(always)]
-fn mat_vec_mul_mod(a: &[Vec<Mod5>], x: &[Mod5]) -> Vec<Mod5> {
+pub fn mat_vec_mul_mod(a: &[Vec<Mod5>], x: &[Mod5]) -> Vec<Mod5> {
     a.iter()
         .map(|row| {
             row.iter().zip(x).fold(Mod5::new(0, R), |acc, (ai, xi)| {
@@ -103,7 +103,7 @@ fn mat_vec_mul_mod(a: &[Vec<Mod5>], x: &[Mod5]) -> Vec<Mod5> {
         .collect()
 }
 
-fn hash_challenge(pk: &PublicKey, u: &[Mod5], msg: &[u8]) -> u8 {
+pub fn hash_challenge(pk: &PublicKey, u: &[Mod5], msg: &[u8]) -> u8 {
     let mut h = Hasher::new();
     for row in &pk.a {
         for c in row {

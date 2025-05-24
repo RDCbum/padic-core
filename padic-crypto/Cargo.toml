@@ -9,6 +9,8 @@ description = "Compact MSIS/LWE KEM & signature built on padic-core"
 padic-core = { path = ".." }
 rand       = "0.9"
 blake3     = "1.5"
+halo2_proofs = { version = "0.3" }
+pasta_curves = "0.5"          # curva Pallas/Vesta para KZG
 
 [dev-dependencies]
 proptest  = "1.4"
