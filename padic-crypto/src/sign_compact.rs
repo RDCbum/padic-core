@@ -1,27 +1,27 @@
-//! Firma MSIS Compact – Sprint C-2 (sign & verify reales)
+//! Firma MSIS Compact – hardening CT (branch-free)
 
 use blake3::Hasher;
 use padic_core::mod5::Mod5;
 use rand::{rng, RngCore};
 
-/* ---------- Constantes Tier-Compact ---------- */
+/* ---------- Constantes ---------- */
 
-pub const R: u32 = 12; // trabajamos mod 5¹²
+pub const R: u32 = 12;
 pub const N: usize = 109;
 pub const M: usize = 93;
 pub const OMEGA: usize = 47;
 
-/* ---------- Tipos públicos ---------- */
+/* ---------- Tipos ---------- */
 
 #[derive(Clone, Debug)]
 pub struct PublicKey {
-    pub a: Vec<Vec<Mod5>>, // M×N
-    pub t: Vec<Mod5>,      // M
+    pub a: Vec<Vec<Mod5>>,
+    pub t: Vec<Mod5>,
 }
 
 #[derive(Clone, Debug)]
 pub struct SecretKey {
-    pub s: Vec<Mod5>, // N
+    pub s: Vec<Mod5>,
 }
 
 #[derive(Clone, Debug)]
@@ -30,10 +30,10 @@ pub struct Keypair {
     pub sk: SecretKey,
 }
 
-/// Firma = (c, z) con c ∈ [0,255] y peso(z) ≤ Ω
+/// Firma = (c, z) con c ∈ [0,255] y peso(z) ≤ Ω.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Signature {
-    pub c: u8, // se usa sólo su bit 0
+    pub c: u8,
     pub z: Vec<Mod5>,
 }
 
@@ -41,8 +41,7 @@ pub struct Signature {
 
 fn sample_uniform_modq(rng: &mut impl RngCore) -> Mod5 {
     const Q: u64 = 5u64.pow(R);
-    const TWO64: u128 = 1u128 << 64;
-    const BOUND: u64 = (TWO64 - (TWO64 % Q as u128)) as u64;
+    const BOUND: u64 = ((1u128 << 64) - ((1u128 << 64) % Q as u128)) as u64;
     loop {
         let v = rng.next_u64();
         if v < BOUND {
@@ -59,8 +58,8 @@ fn sample_sparse_vec(rng: &mut impl RngCore) -> Vec<Mod5> {
         idx.swap(i, j);
     }
     for &k in &idx[..OMEGA] {
-        let sign = if rng.next_u32() & 1 == 0 { 1 } else { -1 };
-        v[k] = Mod5::new(sign, R);
+        let s = if rng.next_u32() & 1 == 0 { 1 } else { -1 };
+        v[k] = Mod5::new(s, R);
     }
     v
 }
@@ -75,23 +74,21 @@ fn mat_vec_mul_mod(a: &[Vec<Mod5>], x: &[Mod5]) -> Vec<Mod5> {
         .collect()
 }
 
-/// H(pk‖u‖msg) → primer byte como desafío (0-255).
 fn hash_challenge(pk: &PublicKey, u: &[Mod5], msg: &[u8]) -> u8 {
     let mut h = Hasher::new();
     for row in &pk.a {
-        for coef in row {
-            h.update(&coef.value().to_le_bytes());
+        for c in row {
+            h.update(&c.value().to_le_bytes());
         }
     }
-    for coef in u {
-        h.update(&coef.value().to_le_bytes());
+    for c in u {
+        h.update(&c.value().to_le_bytes());
     }
     h.update(msg);
-    let digest: [u8; 32] = h.finalize().into();
-    digest[0] // byte completo
+    h.finalize().as_bytes()[0]
 }
 
-fn hamming_weight(v: &[Mod5]) -> usize {
+fn hw(v: &[Mod5]) -> usize {
     v.iter().filter(|c| c.value() != 0).count()
 }
 
@@ -110,50 +107,50 @@ pub fn keygen() -> Keypair {
     }
 }
 
-/* ---------- Firmar ---------- */
+/* ---------- Constant-time mask ---------- */
+
+#[inline]
+fn ct_mask(bit: u8) -> i128 {
+    -(bit as i8 as i128)
+} // 0 → 0, 1 → −1
+
+/* ---------- Sign ---------- */
 
 pub fn sign(kp: &Keypair, msg: &[u8]) -> Signature {
     let mut rng = rng();
     loop {
         let y = sample_sparse_vec(&mut rng);
         let u = mat_vec_mul_mod(&kp.pk.a, &y);
-
-        let c_byte = hash_challenge(&kp.pk, &u, msg);
-        let bit0 = c_byte & 1;
+        let c = hash_challenge(&kp.pk, &u, msg);
+        let m = ct_mask(c & 1); // −1 ó 0
 
         let z: Vec<Mod5> = y
             .iter()
             .zip(&kp.sk.s)
             .map(|(yi, si)| {
-                if bit0 == 1 {
-                    yi.clone() + si.clone()
-                } else {
-                    yi.clone()
-                }
+                let add = si.clone() * Mod5::new(m, R);
+                yi.clone() + add
             })
             .collect();
 
-        if hamming_weight(&z) <= OMEGA {
-            return Signature { c: c_byte, z };
+        if hw(&z) <= OMEGA {
+            return Signature { c, z };
         }
     }
 }
 
-/* ---------- Verificar ---------- */
+/* ---------- Verify ---------- */
 
 pub fn verify(pk: &PublicKey, msg: &[u8], sig: &Signature) -> bool {
-    if hamming_weight(&sig.z) > OMEGA {
+    if hw(&sig.z) > OMEGA {
         return false;
     }
 
-    let bit0 = sig.c & 1;
-    let mut u_prime = mat_vec_mul_mod(&pk.a, &sig.z);
-    if bit0 == 1 {
-        for (ui, ti) in u_prime.iter_mut().zip(&pk.t) {
-            *ui = ui.clone() - ti.clone();
-        }
+    let m = ct_mask(sig.c & 1);
+    let mut u_p = mat_vec_mul_mod(&pk.a, &sig.z);
+    for (ui, ti) in u_p.iter_mut().zip(&pk.t) {
+        *ui = ui.clone() + (ti.clone() * Mod5::new(m, R));
     }
 
-    let c_prime = hash_challenge(pk, &u_prime, msg);
-    sig.c == c_prime
+    sig.c == hash_challenge(pk, &u_p, msg)
 }
