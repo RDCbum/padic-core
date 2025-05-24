@@ -1,11 +1,11 @@
 #![deny(warnings)]
 #![allow(clippy::redundant_clone)]
 
+use crate::error::DeserializeError;
 use crate::fo;
 use blake3;
 use padic_core::Mod5;
 use rand::{rng, Rng};
-use crate::error::DeserializeError;
 
 /* ---------- parámetros públicos ---------- */
 pub const N: usize = 109;
@@ -127,7 +127,6 @@ impl Ciphertext {
         Ok(Self { u, v })
     }
 }
-
 
 /* ---------- keygen ---------- */
 

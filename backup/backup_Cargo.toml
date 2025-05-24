@@ -1,0 +1,29 @@
+[package]
+name        = "padic-core"
+version     = "0.1.0"
+edition     = "2021"
+license     = "MIT"
+description = "p-adic arithmetic core for Padlock+"
+
+# ────────────── WORKSPACE ──────────────
+[workspace]
+members = [
+    ".",            # el propio padic-core  (el punto)
+    "padic-crypto", # el nuevo crate
+]
+
+# ───────── DEPENDENCIAS DEL CRATE ───────
+[dependencies]
+
+
+[dev-dependencies]         # ← sólo para tests y benchmarks de padic-core
+proptest  = "1.4"
+criterion = "0.5"
+rand       = "0.9"
+
+[profile.release]
+opt-level = 3         # ya por defecto
+lto       = "thin"    # link-time optimisation ligera
+codegen-units = 1     # mejor optimizado, más lento de compilar
+
+
