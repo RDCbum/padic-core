@@ -2,6 +2,8 @@
 
 //! π SIS batch – Halo 2 scaffold (v0.3) con gates mínimas.
 
+use crate::agg_sig::AggregateSig;
+use crate::sign_compact::PublicKey;
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
     pasta::pallas,
@@ -21,6 +23,71 @@ pub struct PiSISCircuit {
     pub b: Vec<Scalar>, // bits presencia
     pub m: Vec<Scalar>, // coeficientes matriz M
     pub u: Vec<Scalar>, // instancia pública
+}
+
+/* ---------- helpers ---------- */
+
+const Q_I128: i128 = 244_140_625; // 5¹²
+
+fn to_scalar(x: i128) -> Scalar {
+    let mut v = x % Q_I128;
+    if v < 0 {
+        v += Q_I128;
+    }
+    Scalar::from(v as u64)
+}
+
+impl PiSISCircuit {
+    /// Construye el circuito a partir de la firma agregada y los PK.
+    pub fn from_aggregate(
+        agg: &AggregateSig,
+        pks: &[PublicKey],
+        _msg: &[u8], // todavía sin usar
+    ) -> Self {
+        /* 1) w = concatenación de z  (de momento usamos z_sum como stub) */
+        let w: Vec<Scalar> = agg
+            .z_sum
+            .iter()
+            .map(|z| to_scalar(z.value() as i128))
+            .collect();
+
+        /* 2) b = 1 si wᵢ ≠ 0 */
+        let b: Vec<Scalar> = w
+            .iter()
+            .map(|coef| {
+                if *coef == Scalar::zero() {
+                    Scalar::zero()
+                } else {
+                    Scalar::one()
+                }
+            })
+            .collect();
+
+        /* 3) m = coeficientes de M = [A₁‖…‖A_k] */
+        let mut m = Vec::<Scalar>::new();
+        for pk in pks {
+            for row in &pk.a {
+                for coef in row {
+                    m.push(to_scalar(coef.value() as i128));
+                }
+            }
+        }
+
+        /* 4) u = Σuᵢ + m·Σtᵢ */
+        let rows = pks[0].t.len(); // 93
+        let m_factor: i128 = if agg.c & 1 == 1 { -1 } else { 0 };
+        let mut acc = vec![0_i128; rows];
+
+        for (pk, u_vec) in pks.iter().zip(&agg.u_list) {
+            for j in 0..rows {
+                let val = u_vec[j].value() as i128 + m_factor * pk.t[j].value() as i128;
+                acc[j] += val;
+            }
+        }
+        let u: Vec<Scalar> = acc.into_iter().map(to_scalar).collect();
+
+        Self { w, b, m, u }
+    }
 }
 
 #[derive(Clone, Debug)]
