@@ -395,9 +395,11 @@ name = "padic-crypto"
 version = "0.0.1"
 dependencies = [
  "blake3",
+ "once_cell",
  "padic-core",
  "proptest",
  "rand 0.9.1",
+ "rand_core 0.9.3",
 ]
 
 [[package]]
