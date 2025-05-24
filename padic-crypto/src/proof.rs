@@ -1,39 +1,76 @@
 #![deny(warnings)]
 
+//! π SIS batch – Halo 2 scaffold (v0.3) con gates mínimas.
+
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
-    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Fixed, Instance},
-    transcript::{Blake2bRead, Blake2bWrite, Challenge255},
+    pasta::pallas,
+    plonk::{
+        Advice, Circuit, Column, ConstraintSystem, Error, Expression, Fixed, Instance, Selector,
+    },
+    poly::Rotation, // ← Rotation está en el módulo poly
 };
-use halo2curves::pasta::{EqAffine, Fp as Scalar};
+
+pub type Scalar = pallas::Scalar;
 
 /* ---------- Circuit & Config ---------- */
 
 #[derive(Clone, Debug)]
 pub struct PiSISCircuit {
-    pub w: Vec<Scalar>,
+    pub w: Vec<Scalar>, // coeficientes z concatenados (k·N)
+    pub b: Vec<Scalar>, // bits presencia
+    pub m: Vec<Scalar>, // coeficientes matriz M
+    pub u: Vec<Scalar>, // instancia pública
 }
 
 #[derive(Clone, Debug)]
 pub struct PiSISConfig {
-    pub w: Column<Advice>,
-    pub m: Vec<Column<Fixed>>,
-    pub u: Column<Instance>,
+    col_w: Column<Advice>,
+    col_b: Column<Advice>,
+    col_m: Column<Fixed>,
+    col_q: Selector,
+    _col_u: Column<Instance>, // aún no usado
 }
 
 impl PiSISConfig {
-    pub fn configure(meta: &mut ConstraintSystem<Scalar>, rows: usize) -> Self {
-        let w = meta.advice_column();
-        let u = meta.instance_column();
-        let m: Vec<_> = (0..rows).map(|_| meta.fixed_column()).collect();
+    fn configure(meta: &mut ConstraintSystem<Scalar>) -> Self {
+        let col_w = meta.advice_column();
+        let col_b = meta.advice_column();
+        let col_m = meta.fixed_column();
+        let col_q = meta.selector();
+        let col_u = meta.instance_column();
 
-        meta.enable_equality(w);
-        meta.enable_equality(u);
-        for col in &m {
-            meta.enable_equality(*col);
+        /* Gate 1: q·(m·w − u) = 0 */
+        meta.create_gate("row equality", |meta| {
+            let q = meta.query_selector(col_q);
+            let m = meta.query_fixed(col_m);
+            let w = meta.query_advice(col_w, Rotation::cur());
+            let u = meta.query_instance(col_u, Rotation::cur());
+            vec![q * (m * w - u)]
+        });
+
+        /* Gate 2: b booleano */
+        meta.create_gate("b boolean", |meta| {
+            let b = meta.query_advice(col_b, Rotation::cur());
+            let one = Expression::Constant(Scalar::one());
+            vec![b.clone() * (one - b)]
+        });
+
+        /* Gate 3: (1−b)·w = 0 */
+        meta.create_gate("link w/b", |meta| {
+            let b = meta.query_advice(col_b, Rotation::cur());
+            let w = meta.query_advice(col_w, Rotation::cur());
+            let one = Expression::Constant(Scalar::one());
+            vec![(one - b) * w]
+        });
+
+        Self {
+            col_w,
+            col_b,
+            col_m,
+            col_q,
+            _col_u: col_u,
         }
-
-        Self { w, m, u }
     }
 }
 
@@ -43,12 +80,15 @@ impl Circuit<Scalar> for PiSISCircuit {
 
     fn without_witnesses(&self) -> Self {
         Self {
-            w: vec![Scalar::default(); self.w.len()],
+            w: vec![Scalar::zero(); self.w.len()],
+            b: vec![Scalar::zero(); self.b.len()],
+            m: self.m.clone(),
+            u: self.u.clone(),
         }
     }
 
     fn configure(meta: &mut ConstraintSystem<Scalar>) -> Self::Config {
-        PiSISConfig::configure(meta, 1) // stub: 1 fila fija
+        PiSISConfig::configure(meta)
     }
 
     fn synthesize(
@@ -57,10 +97,19 @@ impl Circuit<Scalar> for PiSISCircuit {
         mut layouter: impl Layouter<Scalar>,
     ) -> Result<(), Error> {
         layouter.assign_region(
-            || "w advice",
+            || "assign rows",
             |mut region| {
-                for (offset, val) in self.w.iter().enumerate() {
-                    region.assign_advice(|| "w", config.w, offset, || Value::known(*val))?;
+                let rows = self.m.len();
+                for offset in 0..rows {
+                    config.col_q.enable(&mut region, offset)?;
+
+                    let w_val = *self.w.get(offset).unwrap_or(&Scalar::zero());
+                    let b_val = *self.b.get(offset).unwrap_or(&Scalar::zero());
+                    let m_val = *self.m.get(offset).unwrap_or(&Scalar::zero());
+
+                    region.assign_advice(|| "w", config.col_w, offset, || Value::known(w_val))?;
+                    region.assign_advice(|| "b", config.col_b, offset, || Value::known(b_val))?;
+                    region.assign_fixed(|| "m", config.col_m, offset, || Value::known(m_val))?;
                 }
                 Ok(())
             },
@@ -68,26 +117,22 @@ impl Circuit<Scalar> for PiSISCircuit {
     }
 }
 
-/* ---------- Parámetros stub ---------- */
+/* ---------- Parámetros y prueba (stubs) ---------- */
 
-pub type HaloParams = (); // aún sin esquema de compromiso real
+pub type HaloParams = ();
 
 pub fn setup_params() -> HaloParams {
-    () // placeholder
+    ()
 }
 
-/* ---------- Prueba stub ---------- */
-
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct Proof(Vec<u8>);
 
-pub fn prove(_params: &HaloParams, _circuit: &PiSISCircuit) -> Proof {
-    let transcript = Blake2bWrite::<_, EqAffine, Challenge255<EqAffine>>::init(Vec::new());
-    Proof(transcript.finalize())
+pub fn prove(_: &HaloParams, _dummy_rows: usize) -> Proof {
+    Proof(Vec::new())
 }
 
-pub fn verify(_params: &HaloParams, _proof: &Proof) -> bool {
-    let _ = Blake2bRead::<_, EqAffine, Challenge255<EqAffine>>::init(&_proof.0[..]);
+pub fn verify(_: &HaloParams, _: &Proof) -> bool {
     true
 }
-
