@@ -1,22 +1,41 @@
-[package]
-name        = "padic-core"
-version     = "0.1.0"
-edition     = "2021"
-license     = "MIT"
-description = "p-adic arithmetic core for Padlock+"
+############  PADLOCK+ ─ Workspace raíz  ############
 
-# ────────────── WORKSPACE ──────────────
+[package]
+name         = "padic-core"          # el crate raíz también es librería
+version      = "0.1.0"
+edition      = "2021"
+license      = "MIT"
+description  = "p-adic arithmetic core for Padlock+"
+
+#####################################################
+#  WORKSPACE – incluye los dos crates del proyecto  #
+#####################################################
 [workspace]
 members = [
-    ".",            # el propio padic-core  (el punto)
-    "padic-crypto", # el nuevo crate
+    ".",             # este propio crate (padic-core)
+    "padic-crypto",  # la biblioteca criptográfica
 ]
 
-# ───────── DEPENDENCIAS DEL CRATE ───────
+#####################################################
+#   DEPENDENCIAS DEL CRATE padic-core (productivo)  #
+#####################################################
 [dependencies]
+# (por ahora ninguna; padic-core solo expone Mod5)
 
-
-[dev-dependencies]         # ← sólo para tests y benchmarks de padic-core
+#####################################################
+#   DEPENDENCIAS DE DESARROLLO (tests & benches)    #
+#####################################################
+[dev-dependencies]
 proptest  = "1.4"
 criterion = "0.5"
-rand       = "0.9"
+rand      = "0.9"
+
+#####################################################
+#   PERFILES DE COMPILACIÓN                         #
+#####################################################
+[profile.release]
+opt-level       = 3      # máxima optimización
+lto             = "thin" # link-time optimisation ligera
+codegen-units   = 1      # mejor rendimiento del binario final
+
+

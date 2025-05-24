@@ -1,6 +1,7 @@
 #![deny(warnings)]
 #![allow(clippy::redundant_clone)]
 
+use crate::error::DeserializeError;
 use crate::fo;
 use blake3;
 use padic_core::Mod5;
@@ -10,6 +11,11 @@ use rand::{rng, Rng};
 pub const N: usize = 109;
 pub const R_PARAM: u32 = 12;
 pub const Q: u128 = 5u128.pow(R_PARAM);
+
+pub const BYTES_PER_COEFF: usize = 16; // u128 little-endian
+pub const PK_LEN: usize = (N * N + N) * BYTES_PER_COEFF;
+pub const SK_LEN: usize = N * BYTES_PER_COEFF;
+pub const CT_LEN: usize = (N + 1) * BYTES_PER_COEFF;
 
 /* ---------- structs ---------- */
 
@@ -26,6 +32,100 @@ pub struct SecretKey {
 pub struct Ciphertext {
     pub u: Vec<Mod5>,
     pub v: Mod5,
+}
+
+/* ---------- serialización binaria ---------- */
+impl PublicKey {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut out = Vec::with_capacity(PK_LEN);
+        for row in &self.a {
+            for c in row {
+                out.extend_from_slice(&c.value().to_le_bytes());
+            }
+        }
+        for c in &self.t {
+            out.extend_from_slice(&c.value().to_le_bytes());
+        }
+        out
+    }
+
+    pub fn from_bytes(buf: &[u8]) -> Result<Self, DeserializeError> {
+        if buf.len() != PK_LEN {
+            return Err(DeserializeError::Length);
+        }
+        let mut off = 0;
+        let mut a = Vec::with_capacity(N);
+        for _ in 0..N {
+            let mut row = Vec::with_capacity(N);
+            for _ in 0..N {
+                let mut tmp = [0u8; 16];
+                tmp.copy_from_slice(&buf[off..off + 16]);
+                off += 16;
+                row.push(Mod5::new(u128::from_le_bytes(tmp) as i128, R_PARAM));
+            }
+            a.push(row);
+        }
+        let mut t = Vec::with_capacity(N);
+        for _ in 0..N {
+            let mut tmp = [0u8; 16];
+            tmp.copy_from_slice(&buf[off..off + 16]);
+            off += 16;
+            t.push(Mod5::new(u128::from_le_bytes(tmp) as i128, R_PARAM));
+        }
+        Ok(Self { a, t })
+    }
+}
+
+impl SecretKey {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut out = Vec::with_capacity(SK_LEN);
+        for c in &self.s {
+            out.extend_from_slice(&c.value().to_le_bytes());
+        }
+        out
+    }
+
+    pub fn from_bytes(buf: &[u8]) -> Result<Self, DeserializeError> {
+        if buf.len() != SK_LEN {
+            return Err(DeserializeError::Length);
+        }
+        let mut s = Vec::with_capacity(N);
+        for chunk in buf.chunks_exact(16) {
+            let mut tmp = [0u8; 16];
+            tmp.copy_from_slice(chunk);
+            s.push(Mod5::new(u128::from_le_bytes(tmp) as i128, R_PARAM));
+        }
+        Ok(Self { s })
+    }
+}
+
+impl Ciphertext {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut out = Vec::with_capacity(CT_LEN);
+        for c in &self.u {
+            out.extend_from_slice(&c.value().to_le_bytes());
+        }
+        out.extend_from_slice(&self.v.value().to_le_bytes());
+        out
+    }
+
+    pub fn from_bytes(buf: &[u8]) -> Result<Self, DeserializeError> {
+        if buf.len() != CT_LEN {
+            return Err(DeserializeError::Length);
+        }
+        let mut off = 0;
+        let mut u = Vec::with_capacity(N);
+        for _ in 0..N {
+            let mut tmp = [0u8; 16];
+            tmp.copy_from_slice(&buf[off..off + 16]);
+            off += 16;
+            u.push(Mod5::new(u128::from_le_bytes(tmp) as i128, R_PARAM));
+        }
+        let mut tmp = [0u8; 16];
+        tmp.copy_from_slice(&buf[off..off + 16]);
+        let v = Mod5::new(u128::from_le_bytes(tmp) as i128, R_PARAM);
+        Ok(Self { u, v })
+    }
 }
 
 /* ---------- keygen ---------- */
