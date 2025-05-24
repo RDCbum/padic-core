@@ -3,6 +3,7 @@
 use padic_core::Mod5;
 use rand_core::{CryptoRng, RngCore};
 
+use crate::kem_compact::Q;
 use crate::kem_compact::{PublicKey, N};
 use crate::sampler::{sample_error, uniform_u128};
 
@@ -14,12 +15,12 @@ fn dot(a: &[Mod5], b: &[Mod5]) -> Mod5 {
     })
 }
 
-pub fn enc_core<R: RngCore + CryptoRng>(
+pub fn enc_core<R: RngCore + CryptoRng + ?Sized>(
     pk: &PublicKey,
     rng: &mut R,
 ) -> (Vec<Mod5>, Mod5, Vec<Mod5>, Vec<i8>) {
     let r: Vec<Mod5> = (0..N)
-        .map(|_| Mod5::new(uniform_u128(rng) as i128, R_PARAM))
+        .map(|_| Mod5::new(uniform_u128(rng, Q) as i128, R_PARAM))
         .collect();
 
     let e: Vec<i8> = (0..N).map(|_| sample_error(rng)).collect();
