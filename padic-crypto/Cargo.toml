@@ -5,12 +5,20 @@ edition     = "2021"
 license     = "MIT"
 description = "Compact MSIS/LWE KEM & signature built on padic-core"
 
+# ─── HALO 2 desarrollo – commit estable de 14 abr 2025 ───────────────────
+# Usa la misma revisión para `halo2_proofs` y `halo2curves`
+
 [dependencies]
 padic-core = { path = ".." }
 rand       = "0.9"
 blake3     = "1.5"
-halo2_proofs = { version = "0.3" }
-pasta_curves = "0.5"          # curva Pallas/Vesta para KZG
+
+# Halo 2 crates.io 0.3  – curvas Pasta, compromiso genérico
+halo2_proofs  = "0.3"
+halo2curves   = "0.5"
+
+# opcional para paralelizar benches
+rayon = { version = "1.10", optional = true }
 
 [dev-dependencies]
 proptest  = "1.4"
@@ -19,7 +27,6 @@ criterion = { version = "0.5", default-features = false, features = ["cargo_benc
 [[bench]]
 name    = "sign_bench"   # ← coincide con el nombre del archivo sin .rs
 harness = false          # ← desactiva libtest, deja paso a Criterion
-
 
 
 

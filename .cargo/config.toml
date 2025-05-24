@@ -3,3 +3,7 @@
 
 [source.vendored]
 directory = "vendor"
+
+[net]
+git-fetch-with-cli = true
+
