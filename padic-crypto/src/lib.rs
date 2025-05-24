@@ -6,5 +6,6 @@ pub mod fo;
 pub mod kem_compact;
 pub mod sampler;
 pub mod sign_compact;
+pub mod error; 
 
 // --- ← aquí ya no hay nada más --- //

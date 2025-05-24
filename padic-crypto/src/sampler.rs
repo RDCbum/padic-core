@@ -2,7 +2,7 @@
 
 #![deny(warnings)]
 
-use rand_core::{CryptoRng, RngCore};
+use rand::{CryptoRng, RngCore};
 
 /// Rechazo uniforme: devuelve `x ∈ [0, q)`
 pub fn uniform_u128<R: RngCore + CryptoRng + ?Sized>(rng: &mut R, q: u128) -> u128 {

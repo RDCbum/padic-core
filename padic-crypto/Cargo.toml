@@ -5,15 +5,19 @@ edition     = "2021"
 license     = "MIT"
 description = "Compact MSIS/LWE KEM & signature built on padic-core"
 
-[dev-dependencies]
-proptest = "1.4"
-
 [dependencies]
-padic-core = { path = ".." }   # ← un solo punto (.. = directorio padre)
-rand  = "0.9"
-rand_core  = "0.9"
-blake3 = "1.5"
-once_cell  = "1.19" 
+padic-core = { path = ".." }
+rand       = "0.9"
+blake3     = "1.5"
+
+[dev-dependencies]
+proptest  = "1.4"
+criterion = { version = "0.5", default-features = false, features = ["cargo_bench_support"] }
+
+[[bench]]
+name    = "sign_bench"   # ← coincide con el nombre del archivo sin .rs
+harness = false          # ← desactiva libtest, deja paso a Criterion
+
 
 
 

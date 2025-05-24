@@ -3,6 +3,7 @@
 use blake3::Hasher;
 use padic_core::mod5::Mod5;
 use rand::{rng, RngCore};
+use crate::error::DeserializeError;
 
 /* ---------- Constantes ---------- */
 
@@ -10,6 +11,7 @@ pub const R: u32 = 12;
 pub const N: usize = 109;
 pub const M: usize = 93;
 pub const OMEGA: usize = 47;
+pub const SIG_LEN: usize = 1 + N * 16;
 
 /* ---------- Tipos ---------- */
 
@@ -37,8 +39,34 @@ pub struct Signature {
     pub z: Vec<Mod5>,
 }
 
+impl Signature {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut out = Vec::with_capacity(SIG_LEN);
+        out.push(self.c);
+        for z in &self.z {
+            out.extend_from_slice(&z.value().to_le_bytes());
+        }
+        out
+    }
+
+    pub fn from_bytes(buf: &[u8]) -> Result<Self, DeserializeError> {
+        if buf.len() != SIG_LEN {
+            return Err(DeserializeError::Length);
+        }
+        let c = buf[0];
+        let mut z = Vec::with_capacity(N);
+        for chunk in buf[1..].chunks_exact(16) {
+            let mut tmp = [0u8; 16];
+            tmp.copy_from_slice(chunk);
+            z.push(Mod5::new(u128::from_le_bytes(tmp) as i128, R));
+        }
+        Ok(Self { c, z })
+    }
+}
+
 /* ---------- Helpers ---------- */
 
+#[inline(always)]
 fn sample_uniform_modq(rng: &mut impl RngCore) -> Mod5 {
     const Q: u64 = 5u64.pow(R);
     const BOUND: u64 = ((1u128 << 64) - ((1u128 << 64) % Q as u128)) as u64;
@@ -64,6 +92,7 @@ fn sample_sparse_vec(rng: &mut impl RngCore) -> Vec<Mod5> {
     v
 }
 
+#[inline(always)]
 fn mat_vec_mul_mod(a: &[Vec<Mod5>], x: &[Mod5]) -> Vec<Mod5> {
     a.iter()
         .map(|row| {

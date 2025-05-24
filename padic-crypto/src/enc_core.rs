@@ -1,7 +1,7 @@
 #![deny(warnings)]
 
 use padic_core::Mod5;
-use rand_core::{CryptoRng, RngCore};
+use rand::{CryptoRng, RngCore};
 
 use crate::kem_compact::Q;
 use crate::kem_compact::{PublicKey, N};
